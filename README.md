@@ -48,7 +48,7 @@ graph TD
     A[User Input] --> B{Deterministic Engine}
     B -->|Biometric Math| C[Archetype Matches]
     B -->|Regional Data| D[Culture Alignment]
-    C & D --> E[Gemini 1.5 Flash]
+    C & D --> E[Gemini 3 Flash Preview]
     E -->|Narrative Generation| F[Personalized Mirror Report]
     F --> G[Interactive Visuals]
 ```
