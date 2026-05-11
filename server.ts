@@ -16,6 +16,7 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
 const LOCATION = process.env.VERTEX_AI_LOCATION || "us-central1";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const vertexModel = PROJECT_ID
   ? new VertexAI({ project: PROJECT_ID, location: LOCATION }).getGenerativeModel({
@@ -31,7 +32,7 @@ function loadCsv(filename: string) {
   return parse(content, { columns: true, skip_empty_lines: true });
 }
 
-function getVertexText(response: any) {
+function getGeminiText(response: any) {
   return (
     response?.candidates?.[0]?.content?.parts
       ?.map((part: any) => part.text || "")
@@ -40,12 +41,37 @@ function getVertexText(response: any) {
   );
 }
 
-function requireVertexModel() {
-  if (!vertexModel) {
-    throw new Error("Missing GOOGLE_CLOUD_PROJECT, GCLOUD_PROJECT, or GCP_PROJECT for Vertex AI.");
+function getGeminiApiModelName(model: string) {
+  return model.replace(/^models\//, "");
+}
+
+async function generateWithGeminiApi(request: any) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${getGeminiApiModelName(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY || "")}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Gemini API request failed (${response.status}): ${details}`);
   }
 
-  return vertexModel;
+  return response.json();
+}
+
+async function generateContent(request: any) {
+  if (GEMINI_API_KEY) {
+    return generateWithGeminiApi(request);
+  }
+
+  if (!vertexModel) {
+    throw new Error("Missing GEMINI_API_KEY or Vertex AI project env (GOOGLE_CLOUD_PROJECT, GCLOUD_PROJECT, or GCP_PROJECT).");
+  }
+
+  const result = await vertexModel.generateContent(request);
+  return result.response;
 }
 
 function cleanAnalysis(analysis: any) {
@@ -109,7 +135,7 @@ async function startServer() {
     });
   });
 
-  // API Route for Athlete Analysis (now just for deterministic baseline)
+  // API Route for Athlete Analysis 
   app.post("/api/analyze-baseline", async (req, res) => {
     try {
       const { biometrics } = req.body;
@@ -137,7 +163,6 @@ async function startServer() {
 
   app.post("/api/analyze", async (req, res) => {
     try {
-      const model = requireVertexModel();
       const { biometrics, baseline } = req.body;
       const bmi = biometrics.weight / ((biometrics.height / 100) ** 2);
 
@@ -169,7 +194,7 @@ Return JSON only:
   "historicalJourney": { "eras": [...], "narrative": "..." }
 }`;
 
-      const result = await model.generateContent({
+      const response = await generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
@@ -177,17 +202,16 @@ Return JSON only:
         },
       });
 
-      const text = getVertexText(result.response);
+      const text = getGeminiText(response);
       res.json(cleanAnalysis(JSON.parse(text || "{}")));
     } catch (error) {
-      console.error("Vertex Analysis Error:", error);
-      res.status(500).json({ error: "Failed to analyze with Vertex AI" });
+      console.error("Gemini Analysis Error:", error);
+      res.status(500).json({ error: "Failed to analyze with Gemini" });
     }
   });
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const model = requireVertexModel();
       const { message, profile, results } = req.body;
 
       const systemInstruction = `You are the Team USA Digital Mirror Agent.
@@ -203,19 +227,19 @@ Context:
 - Top Match: ${results?.archetypes?.[0]?.title || "Unknown"}
 - Era: ${results?.historicalJourney?.eras?.[0]?.era || "Historical"}`;
 
-      const result = await model.generateContent({
+      const response = await generateContent({
         contents: [{ role: "user", parts: [{ text: message }] }],
-        systemInstruction,
+        systemInstruction: { parts: [{ text: systemInstruction }] },
         generationConfig: {
           temperature: 0,
         },
       });
 
-      const text = getVertexText(result.response);
+      const text = getGeminiText(response);
       res.json({ text: enforceConditionalLanguage(text || "Connection unstable. Historical mapping paused.") });
     } catch (error) {
-      console.error("Vertex Chat Error:", error);
-      res.status(500).json({ error: "Failed to chat with Vertex AI" });
+      console.error("Gemini Chat Error:", error);
+      res.status(500).json({ error: "Failed to chat with Gemini" });
     }
   });
 

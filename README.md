@@ -80,6 +80,18 @@ The application is built for the **Google Cloud** ecosystem:
 - **Compute**: Cloud Run
 - **AI Infrastructure**: Vertex AI / Gemini API
 
+### Cloud Run environment
+
+AI Studio previews may inject `GEMINI_API_KEY` automatically, but Cloud Run services do not inherit that key after deployment. Configure it manually on the hosted service:
+
+```bash
+gcloud run services update SERVICE_NAME \
+  --region REGION \
+  --update-env-vars GEMINI_API_KEY=YOUR_GEMINI_API_KEY,GEMINI_MODEL=gemini-3-flash-preview
+```
+
+If you prefer Vertex AI project authentication instead of an API key, set `GOOGLE_CLOUD_PROJECT` and `VERTEX_AI_LOCATION`, and make sure the Cloud Run service account has permission to call Vertex AI.
+
 ```text
 /src
  ├── /lib
