@@ -751,6 +751,14 @@ function ResultsView({ data, onReset, region, pathway, onOpenMethodology }: {
   pathway: string,
   onOpenMethodology: () => void
 }) {
+  const topArchetype = data.archetypes?.[0];
+  const profileSummary = enforceConditionalLanguage(
+    data.mirrorNarrative ||
+    topArchetype?.justification ||
+    data.regionalAlignment ||
+    `This profile could reflect a historical Team USA alignment from the ${region} region.`
+  );
+
   return (
     <motion.section 
       initial={{ opacity: 0 }}
@@ -803,9 +811,9 @@ function ResultsView({ data, onReset, region, pathway, onOpenMethodology }: {
             <div className="absolute -top-3 -right-3 bg-victory-red px-2 py-1 text-[10px] font-black italic">MIRROR SYNC</div>
           </div>
           <div className="space-y-4 text-center md:text-left relative z-10">
-            <h3 className="text-4xl font-black italic uppercase tracking-tighter">Profile Alignment: <span className="text-victory-gold">{data.archetypes[0].title}</span></h3>
+            <h3 className="text-4xl font-black italic uppercase tracking-tighter">Profile Alignment: <span className="text-victory-gold">{topArchetype?.title || "Historical Match"}</span></h3>
             <p className="text-neutral-400 font-medium max-w-xl">
-              Your biometric parameters <span className="text-white italic underline">could historically align</span> with elite performers originating from the <span className="text-victory-blue">{region}</span> region. This matches historical Team USA clusters.
+              {profileSummary}
             </p>
           </div>
         </div>

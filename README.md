@@ -8,7 +8,7 @@
 
 > **"Step into the M.I.R.R.O.R. Where your biometrics meet 120 years of Team USA history."**
 
-The **Team USA Digital Mirror** is an immersive exploration platform that bridges the gap between historical sports data and personal potential. Using **Gemini 3 Flash Preview**, it transforms your physical profile into a narrative journey across Olympic and Paralympic history.
+The **Team USA Digital Mirror** is an immersive exploration platform that bridges the gap between historical sports data and personal potential. Using **Gemini 2.5 Flash**, it transforms your physical profile into a narrative journey across Olympic and Paralympic history.
 
 **Live app:** https://example.com/team-usa-digital-mirror
 
@@ -50,7 +50,7 @@ graph TD
     A[User Input] --> B{Deterministic Engine}
     B -->|Biometric Math| C[Archetype Matches]
     B -->|Regional Data| D[Culture Alignment]
-    C & D --> E[Gemini 3 Flash Preview]
+    C & D --> E[Gemini 2.5 Flash]
     E -->|Narrative Generation| F[Personalized Mirror Report]
     F --> G[Interactive Visuals]
 ```
@@ -68,7 +68,7 @@ graph TD
 | :--- | :--- |
 | **Frontend** | React 18, Vite, Tailwind CSS, Framer Motion |
 | **Backend** | Node.js, Express |
-| **AI** | Google GenAI SDK (Gemini 3 Flash Preview) |
+| **AI** | Vertex AI / Gemini 2.5 Flash |
 | **Visualization** | Recharts, D3.js |
 | **Data** | CSV-grounded Historical Archetypes |
 
@@ -82,15 +82,16 @@ The application is built for the **Google Cloud** ecosystem:
 
 ### Cloud Run environment
 
-AI Studio previews may inject `GEMINI_API_KEY` automatically, but Cloud Run services do not inherit that key after deployment. Configure it manually on the hosted service:
+For Cloud Run, the recommended hosted setup is Vertex AI project authentication. This uses the Cloud Run service account instead of a browser-visible API key:
 
 ```bash
 gcloud run services update SERVICE_NAME \
-  --region REGION \
-  --update-env-vars GEMINI_API_KEY=YOUR_GEMINI_API_KEY,GEMINI_MODEL=gemini-3-flash-preview
+  --project ardent-fusion-496018-s8 \
+  --region us-central1 \
+  --update-env-vars GOOGLE_CLOUD_PROJECT=ardent-fusion-496018-s8,VERTEX_AI_LOCATION=us-central1,GEMINI_MODEL=gemini-2.5-flash,AI_PROVIDER=vertex
 ```
 
-If you prefer Vertex AI project authentication instead of an API key, set `GOOGLE_CLOUD_PROJECT` and `VERTEX_AI_LOCATION`, and make sure the Cloud Run service account has permission to call Vertex AI.
+Make sure the Cloud Run service account has permission to call Vertex AI. AI Studio previews may inject `GEMINI_API_KEY` automatically, but Cloud Run services do not inherit that key after deployment.
 
 ```text
 /src

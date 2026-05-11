@@ -15,8 +15,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
 const LOCATION = process.env.VERTEX_AI_LOCATION || "us-central1";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const AI_PROVIDER = (process.env.AI_PROVIDER || "auto").toLowerCase();
 
 const vertexModel = PROJECT_ID
   ? new VertexAI({ project: PROJECT_ID, location: LOCATION }).getGenerativeModel({
@@ -42,7 +43,9 @@ function getGeminiText(response: any) {
 }
 
 function getGeminiApiModelName(model: string) {
-  return model.replace(/^models\//, "");
+  return model
+    .replace(/^models\//, "")
+    .replace(/^publishers\/google\/models\//, "");
 }
 
 async function generateWithGeminiApi(request: any) {
@@ -62,7 +65,16 @@ async function generateWithGeminiApi(request: any) {
 }
 
 async function generateContent(request: any) {
-  if (GEMINI_API_KEY) {
+  const shouldUseGeminiApi =
+    AI_PROVIDER === "gemini" ||
+    AI_PROVIDER === "gemini-api" ||
+    (AI_PROVIDER === "auto" && Boolean(GEMINI_API_KEY));
+
+  if (shouldUseGeminiApi) {
+    if (!GEMINI_API_KEY) {
+      throw new Error("AI_PROVIDER is set to Gemini API, but GEMINI_API_KEY is missing.");
+    }
+
     return generateWithGeminiApi(request);
   }
 
@@ -72,6 +84,131 @@ async function generateContent(request: any) {
 
   const result = await vertexModel.generateContent(request);
   return result.response;
+}
+
+function parseGeminiJson(text: string) {
+  const jsonText = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  return JSON.parse(jsonText || "{}");
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isNonEmptyArray(value: unknown): value is any[] {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function normalizeScore(score: unknown) {
+  const numericScore = Number(score);
+  if (!Number.isFinite(numericScore)) return 0;
+  return Math.round(Math.max(0, Math.min(100, numericScore <= 1 ? numericScore * 100 : numericScore)));
+}
+
+function buildRadarData(baseline: any) {
+  const breakdown = baseline?.matches?.[0]?.breakdown || {};
+
+  return [
+    { attribute: "Height", value: normalizeScore(breakdown.heightSimilarity) },
+    { attribute: "Weight", value: normalizeScore(breakdown.weightSimilarity) },
+    { attribute: "BMI", value: normalizeScore(breakdown.bmiSimilarity) },
+    { attribute: "Sport", value: normalizeScore(breakdown.sportAffinity) },
+    { attribute: "History", value: normalizeScore(breakdown.historicalAlignment) },
+    { attribute: "Pathway", value: normalizeScore(breakdown.pathwayFit) },
+  ];
+}
+
+function buildChartData(baseline: any) {
+  const matches = isNonEmptyArray(baseline?.matches) ? baseline.matches : [];
+
+  return matches.slice(0, 3).map((match: any) => ({
+    attribute: match.name || match.title || "Match",
+    value: normalizeScore(match.score || match.matchScore),
+  }));
+}
+
+function buildHistoricalJourney(eraStats: any[], sportInterest: string) {
+  const lowerInterest = sportInterest?.toLowerCase?.() || "";
+
+  return {
+    eras: eraStats.map((era) => {
+      const families = String(era.dominantFamilies || "")
+        .split(",")
+        .map((family) => family.trim())
+        .filter(Boolean);
+      const focus = families.some((family) => lowerInterest && family.toLowerCase().includes(lowerInterest))
+        ? 82
+        : 64;
+
+      return {
+        era: era.era || "Historical Era",
+        focus,
+        dominantFamilies: families,
+        story: enforceConditionalLanguage(era.story || "This era could provide historical Team USA context."),
+      };
+    }),
+    narrative: "Historical era mapping could reflect the closest available Team USA dataset patterns.",
+  };
+}
+
+function mergeBaselineAnalysis(analysis: any, baseline: any, context: { biometrics?: any; eraStats: any[]; regionalStories: any[] }) {
+  const merged = analysis && typeof analysis === "object" ? analysis : {};
+  const matches = isNonEmptyArray(baseline?.matches) ? baseline.matches : [];
+
+  if (!isNonEmptyArray(merged.archetypes) && matches.length) {
+    merged.archetypes = matches.slice(0, 2).map((match: any) => ({
+      title: match.name,
+      description: match.insight,
+      justification: match.factor,
+      confidence: match.confidence,
+      matchScore: match.score,
+      breakdown: match.breakdown,
+    }));
+  }
+
+  if (isNonEmptyArray(merged.archetypes)) {
+    merged.archetypes = merged.archetypes.map((archetype: any, index: number) => {
+      const baselineMatch = matches[index];
+
+      return {
+        ...archetype,
+        title: archetype.title || baselineMatch?.name || "Historical Match",
+        confidence: archetype.confidence || baselineMatch?.confidence,
+        matchScore: normalizeScore(archetype.matchScore ?? baselineMatch?.score),
+        breakdown: baselineMatch?.breakdown || archetype.breakdown,
+      };
+    });
+  }
+
+  if (!isNonEmptyArray(merged.radarData)) {
+    merged.radarData = buildRadarData(baseline);
+  }
+
+  if (!isNonEmptyArray(merged.chartData)) {
+    merged.chartData = buildChartData(baseline);
+  }
+
+  if (!isNonEmptyArray(merged.historicalJourney?.eras)) {
+    merged.historicalJourney = buildHistoricalJourney(context.eraStats, context.biometrics?.sportInterest);
+  }
+
+  if (!merged.regionalReflection && context.biometrics?.region) {
+    merged.regionalReflection = context.regionalStories.find((story) => story.region === context.biometrics.region);
+  }
+
+  if (!merged.regionalAlignment && context.biometrics?.region) {
+    merged.regionalAlignment = `This profile could reflect a regional Team USA alignment from the ${context.biometrics.region} dataset.`;
+  }
+
+  if (!merged.mirrorNarrative && merged.archetypes?.[0]) {
+    merged.mirrorNarrative = merged.archetypes[0].description || merged.archetypes[0].justification;
+  }
+
+  return merged;
 }
 
 function cleanAnalysis(analysis: any) {
@@ -125,6 +262,27 @@ async function startServer() {
   const eraStats = loadCsv("eraStats.csv") || [];
 
   // API Route for Context Data
+  app.get("/api/health", (req, res) => {
+    res.json({
+      ok: true,
+      ai: {
+        provider: AI_PROVIDER,
+        model: GEMINI_MODEL,
+        location: LOCATION,
+        projectConfigured: Boolean(PROJECT_ID),
+        geminiApiKeyConfigured: Boolean(GEMINI_API_KEY),
+        vertexConfigured: Boolean(vertexModel),
+      },
+      data: {
+        archetypes: archetypesData.length,
+        sportStats: sportFamilyStats.length,
+        paralympic: paralympicData.length,
+        regions: regionalStories.length,
+        eraStats: eraStats.length,
+      },
+    });
+  });
+
   app.get("/api/data", (req, res) => {
     res.json({
       archetypes: archetypesData,
@@ -163,17 +321,37 @@ async function startServer() {
 
   app.post("/api/analyze", async (req, res) => {
     try {
-      const { biometrics, baseline } = req.body;
-      const bmi = biometrics.weight / ((biometrics.height / 100) ** 2);
+      const { biometrics, baseline, prompt: clientPrompt } = req.body;
 
-      const prompt = `You are the "Team USA Digital Mirror" analyst.
+      if (!clientPrompt && !biometrics) {
+        return res.status(400).json({ error: "Missing biometrics for analysis" });
+      }
+
+      const analysisBaseline = isNonEmptyArray(baseline?.matches) || !biometrics
+        ? baseline
+        : matchArchetypes({
+            heightCm: biometrics.height,
+            weightKg: biometrics.weight,
+            age: biometrics.age,
+            region: biometrics.region,
+            sportInterest: biometrics.sportInterest,
+            pathway: biometrics.pathway as any,
+            impairmentContext: biometrics.impairment,
+            archetypes: archetypesData,
+            sportStats: sportFamilyStats,
+            paralympicData,
+          });
+
+      const bmi = biometrics ? biometrics.weight / ((biometrics.height / 100) ** 2) : 0;
+
+      const prompt = clientPrompt || `You are the "Team USA Digital Mirror" analyst.
 Analyze the following user profile:
 - Biometrics: Height ${biometrics.height}cm, Weight ${biometrics.weight}kg, BMI ${bmi.toFixed(1)}, Age ${biometrics.age}
 - Identity: Gender ${biometrics.gender}, Regional Origin ${biometrics.region}
 - Interests: Goal is ${biometrics.primaryGoal}, Sport ${biometrics.sportInterest}
 - Pathway: ${biometrics.pathway} (${biometrics.impairment})
 
-Baseline: ${JSON.stringify(baseline?.matches || [])}
+Baseline: ${JSON.stringify(analysisBaseline?.matches || [])}
 
 Tasks:
 1. Suggest 2 archetypes.
@@ -203,10 +381,18 @@ Return JSON only:
       });
 
       const text = getGeminiText(response);
-      res.json(cleanAnalysis(JSON.parse(text || "{}")));
+      const analysis = mergeBaselineAnalysis(parseGeminiJson(text), analysisBaseline, {
+        biometrics,
+        eraStats,
+        regionalStories,
+      });
+      res.json(cleanAnalysis(analysis));
     } catch (error) {
       console.error("Gemini Analysis Error:", error);
-      res.status(500).json({ error: "Failed to analyze with Gemini" });
+      res.status(500).json({
+        error: "Failed to analyze with Gemini",
+        ...(process.env.NODE_ENV !== "production" ? { detail: errorMessage(error) } : {}),
+      });
     }
   });
 
@@ -239,7 +425,10 @@ Context:
       res.json({ text: enforceConditionalLanguage(text || "Connection unstable. Historical mapping paused.") });
     } catch (error) {
       console.error("Gemini Chat Error:", error);
-      res.status(500).json({ error: "Failed to chat with Gemini" });
+      res.status(500).json({
+        error: "Failed to chat with Gemini",
+        ...(process.env.NODE_ENV !== "production" ? { detail: errorMessage(error) } : {}),
+      });
     }
   });
 
