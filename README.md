@@ -66,7 +66,7 @@ graph TD
 | :--- | :--- |
 | **Frontend** | React 18, Vite, Tailwind CSS, Framer Motion |
 | **Backend** | Node.js, Express |
-| **AI** | Google GenAI SDK (Gemini 1.5 Flash) |
+| **AI** | Google GenAI SDK (Gemini 3 Flash Preview) |
 | **Visualization** | Recharts, D3.js |
 | **Data** | CSV-grounded Historical Archetypes |
 
@@ -76,7 +76,6 @@ graph TD
 
 The application is built for the **Google Cloud** ecosystem:
 - **Compute**: Cloud Run
-- **Delivery**: Firebase Hosting
 - **AI Infrastructure**: Vertex AI / Gemini API
 
 ```text
