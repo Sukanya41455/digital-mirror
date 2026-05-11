@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { enforceConditionalLanguage } from './lib/safety';
-import { GoogleGenAI } from "@google/genai";
 import { 
   Dna, 
   Activity, 
@@ -153,18 +152,6 @@ export default function App() {
 
   const handleStart = () => setView('mirror');
 
-  // Initialize Gemini
-  const ai = useMemo(() => {
-    try {
-      const key = (window as any).process?.env?.GEMINI_API_KEY || (process?.env as any)?.GEMINI_API_KEY;
-      if (!key) return null;
-      return new GoogleGenAI({ apiKey: key });
-    } catch (e) {
-      console.error("Gemini Init failed", e);
-      return null;
-    }
-  }, []);
-
   const analyzeData = async () => {
     setLoading(true);
     let contextData: any = null;
@@ -184,51 +171,18 @@ export default function App() {
       contextData = typeof (dataRes as any).json === 'function' ? await (dataRes as any).json() : (dataRes as any);
       baseline = baselineRes && typeof (baselineRes as any).json === 'function' ? await (baselineRes as any).json() : null;
 
-      if (!ai) {
-        throw new Error("API_KEY_MISSING");
-      }
-
-      // 2. AI Analysis via Client Side
-      const bmi = biometrics.weight / ((biometrics.height / 100) ** 2);
-      const prompt = `You are the "Team USA Digital Mirror" analyst. 
-      Analyze the following user profile: 
-      - Biometrics: Height ${biometrics.height}cm, Weight ${biometrics.weight}kg, BMI ${bmi.toFixed(1)}, Age ${biometrics.age}
-      - Identity: Gender ${biometrics.gender}, Regional Origin ${biometrics.region}
-      - Interests: Goal is ${biometrics.primaryGoal}, Sport ${biometrics.sportInterest}
-      - Pathway: ${biometrics.pathway} (${biometrics.impairment})
-      
-      Baseline: ${JSON.stringify(baseline.matches)}
-      
-      Tasks:
-      1. Suggest 2 archetypes. 
-         - title: 2 words max.
-         - description: ONE short sentence.
-         - justification: ONE short sentence.
-      2. Journey Analysis: Map against ERA DATA.
-      3. Narrative: MAX 2 SHORT sentences. BE EXTREMELY BRIEF.
-      
-      Return JSON only:
-      {
-        "archetypes": [
-          { "title": "...", "description": "...", "justification": "...", "confidence": "...", "matchScore": number, "breakdown": { ... } }
-        ],
-        "mirrorNarrative": "...",
-        "chartData": [...],
-        "radarData": [...],
-        "historicalJourney": { "eras": [...], "narrative": "..." }
-      }`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0,
-          seed: 42
-        }
+      // 2. AI Analysis via backend Vertex AI route
+      const aiRes = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ biometrics, baseline })
       });
 
-      const analysis = JSON.parse(response.text || "{}");
+      if (!aiRes.ok) {
+        throw new Error("VERTEX_ANALYSIS_FAILED");
+      }
+
+      const analysis = await aiRes.json();
       
       // Post-process with conditional language enforcement
       if (analysis.archetypes) {
@@ -1323,35 +1277,19 @@ function GeminiChat({ isOpen, onClose, profile, results }: GeminiChatProps) {
     setIsLoading(true);
 
     try {
-      const apiKey = (window as any).process?.env?.GEMINI_API_KEY || (process as any)?.env?.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("MIRROR_KEY_MISSING");
-
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const systemInstruction = `You are the Team USA Digital Mirror Agent.
-
-Rules:
-- Be EXTREMELY BRIEF (max 2 sentences).
-- No paragraphs.
-- Use conditional language (could, may).
-- Never diagnose.
-
-Context: 
-- Profile: ${JSON.stringify(profile)}
-- Top Match: ${results?.archetypes[0]?.title || "Unknown"}
-- Era: ${results?.historicalJourney?.eras[0]?.era || "Historical"}`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: textToSend }] }],
-        config: {
-          systemInstruction,
-          temperature: 0,
-          seed: 42
-        }
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: textToSend,
+          profile,
+          results
+        })
       });
 
-      const reply = response.text || "Connection unstable. Historical mapping paused.";
+      if (!response.ok) throw new Error("MIRROR_CHAT_FAILED");
+
+      const { text: reply } = await response.json();
       setMessages(prev => [...prev, { role: 'model', content: enforceConditionalLanguage(reply) }]);
     } catch (err) {
       console.error(err);
