@@ -1,0 +1,9 @@
+family,avgHeightCm,avgWeightKg,topSports,count
+General,175.7,72.3,"['Alpine Skiing', 'Cross Country Skiing', 'Speed Skating', 'Ice Hockey', 'Equestrianism']",5309
+Combat,174.3,74.3,"['Wrestling', 'Boxing', 'Judo']",539
+Speed/Power,178.7,72.8,['Athletics'],2978
+Aerobic,180.3,73.0,"['Swimming', 'Cycling', 'Triathlon']",1687
+Endurance,183.3,78.7,"['Rowing', 'Canoeing']",944
+Tall Leverage,190.7,84.4,"['Basketball', 'Volleyball']",602
+Powerhouse,171.9,93.7,['Weightlifting'],116
+Precision,169.1,65.1,"['Gymnastics', 'Fencing', 'Shooting', 'Archery']",2039
