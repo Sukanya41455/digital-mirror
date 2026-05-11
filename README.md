@@ -6,9 +6,11 @@
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react" alt="React" />
 </p>
 
-> **"Step into the M.I.R.R.O.R. — Where your biometrics meet 120 years of Team USA history."**
+> **"Step into the M.I.R.R.O.R. Where your biometrics meet 120 years of Team USA history."**
 
 The **Team USA Digital Mirror** is an immersive exploration platform that bridges the gap between historical sports data and personal potential. Using **Gemini 3 Flash Preview**, it transforms your physical profile into a narrative journey across Olympic and Paralympic history.
+
+**Live app:** https://example.com/team-usa-digital-mirror
 
 ---
 
