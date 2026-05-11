@@ -10,7 +10,7 @@
 
 The **Team USA Digital Mirror** is an immersive exploration platform that bridges the gap between historical sports data and personal potential. Using **Gemini 2.5 Flash**, it transforms your physical profile into a narrative journey across Olympic and Paralympic history.
 
-**Live app:** https://example.com/team-usa-digital-mirror
+**Live app:** https://team-usa-digital-mirro-276673677122.us-central1.run.app/
 
 ---
 
